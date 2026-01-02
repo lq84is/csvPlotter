@@ -1,14 +1,15 @@
 import multiprocessing, sys, os
-from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QAction
 import pyqtgraph as pg
-from pyqtgraph.Qt import QtGui, QtCore
+from pyqtgraph.Qt.QtWidgets import *
+from pyqtgraph.Qt.QtGui import QAction
+from pyqtgraph.Qt import QtGui, QtCore, QtWidgets
 import qtawesome
-from PyQt5.QtCore import pyqtSignal
+from pyqtgraph.Qt.QtCore import pyqtSignal
 from pyqtgraph.dockarea import *
 import csv
 import functools
-from PyQt5.QtCore import QRegExp
-from PyQt5.QtCore import Qt
+from pyqtgraph.Qt.QtCore import QRegularExpression
+from pyqtgraph.Qt.QtCore import Qt
 if __name__ != '__main__':
     from .log_utils.common import *
 else:
@@ -16,12 +17,16 @@ else:
     print_err = print
 __all__ = 'spawnViewer'
 
+
 printinf = print
 printerr = print
 
+
 sampleBtnWidth = 14
 
+
 trying_print = print
+
 
 def color_rotator(start = [0, 255, 0], step = 100):
     color = start
@@ -45,6 +50,7 @@ def color_rotator(start = [0, 255, 0], step = 100):
             dark_step %= 4
         
 col_rot = color_rotator()
+
 
 class LineSetting(QWidget):
     def __init__(self, legend, item, label, on_done, *arg, **kw):
@@ -93,6 +99,7 @@ class LineSetting(QWidget):
         self.on_done()
         super().closeEvent(event)
 
+
 class SampleBtn(pg.GraphicsWidget):
     clicked = pyqtSignal()
     def __init__(self, item, icon = None):
@@ -114,6 +121,7 @@ class SampleBtn(pg.GraphicsWidget):
             self.clicked.emit()
         event.accept()
         self.update()
+
 
 class LegendItemMod(pg.LegendItem):
     def setSampleType(self, sample):
@@ -226,12 +234,14 @@ class LegendItemMod(pg.LegendItem):
         self.items = []
         self.updateSize()
 
+
 class PlotItemMod(pg.PlotItem):
     def addLegend(self, offset=(30, 30), **kwargs):
         if self.legend is None:
             self.legend = LegendItemMod(offset=offset, **kwargs)
             self.legend.setParentItem(self.vb)
         return self.legend
+
 
 class DockOpenCSV(Dock):
     @trying(trying_print)
@@ -268,13 +278,13 @@ class DockOpenCSV(Dock):
         if e.mimeData().hasUrls():
             try:
                 files = e.mimeData().urls()
-                rx = QRegExp('.*[\.][Cc][Ss][Vv]')
-                txts = [t.url() for t in files if rx.exactMatch(t.url()) == True]
+                rx = QRegularExpression(r'.*\.csv', QRegularExpression.CaseInsensitiveOption)
+                txts = [t.url() for t in files if rx.match(t.url()).hasMatch() == True]
                 if not txts:
                     printinf('No csv files')
                     return
-                rx = QRegExp('file.*')
-                txts = [t for t in txts if rx.exactMatch(t) == True]
+                rx = QRegularExpression('file.*')
+                txts = [t for t in txts if rx.match(t).hasMatch() == True]
                 txts = [t[len('file:///'):] for t in txts]
                 self.urls = txts
                 #file = txts[0]
@@ -289,15 +299,56 @@ class DockOpenCSV(Dock):
         for file in files:
             with open(file) as f:
                 reader = csv.reader(f)
-                header_row = next(reader)
-                x=[]
-                y=[]
+                header_row = next(reader)       # названия столбцов, если есть
+                x = []
+                cols = None                     # список списков под y1, y2, ..., yN
                 for row in reader:
+                    if not row:
+                        continue
+                    # read 1st row as X
                     x.append(float(row[0]))
-                    y.append(float(row[1]))
-                plot_item = self.plotter.plot(x=x,y=y, name=getNameOnly(file), pen = col_rot.__next__())
-                plot_item.setDownsampling(auto=True, method = 'peak')
+                    if cols is None:
+                        # create array for ech Y-col except zero
+                        cols = [[] for _ in range(len(row) - 1)]
+                    # write data to corresponding arrays
+                    for i in range(1, len(row)):
+                        try:
+                            cols[i-1].append(float(row[i]))
+                        except ValueError:
+                            # if we meet junk in CSV
+                            cols[i-1].append(float('nan')) 
+        
+            # draw:
+            base_name = getNameOnly(file)
+        
+            for idx, y in enumerate(cols):
+                # name 
+                if header_row and len(header_row) > idx + 1:
+                    curve_name = f"{base_name}: {header_row[idx + 1]}"
+                else:
+                    curve_name = f"{base_name}: col {idx+1}"
+        
+                plot_item = self.plotter.plot(
+                    x=x,
+                    y=y,
+                    name=curve_name,
+                    pen=col_rot.__next__()
+                )
+                plot_item.setDownsampling(auto=True, method='peak')
                 plot_item.setClipToView(True)
+#    def handleFile(self, files):
+#        for file in files:
+#            with open(file) as f:
+#                reader = csv.reader(f)
+#                header_row = next(reader)
+#                x=[]
+#                y=[]
+#                for row in reader:
+#                    x.append(float(row[0]))
+#                    y.append(float(row[1]))
+#                plot_item = self.plotter.plot(x=x,y=y, name=getNameOnly(file), pen = col_rot.__next__())
+#                plot_item.setDownsampling(auto=True, method = 'peak')
+#                plot_item.setClipToView(True)
     def updateMouseCoordX(self, pos):
         mouse_point = self.plotter.getViewBox().mapSceneToView(pos)
         self.mouse_coord_x = mouse_point.x()
@@ -307,7 +358,8 @@ class DockOpenCSV(Dock):
         self.plotter.addItem(cursor)
         cursor.setPos([coord,0])
 
-class MainWindow(QMainWindow):
+
+class MainWindow(QtWidgets.QMainWindow):
     @trying(trying_print)
     def __init__(self, *arg, **kw):
         super().__init__(*arg, **kw)
@@ -422,17 +474,20 @@ class MainWindow(QMainWindow):
         if ev.button() == QtCore.Qt.MouseButton.MiddleButton:
             self.delCursor(cursor)
 
+
 def _process_entry_point():
     #app = pg.mkQApp("CSV Plotter")
-    app = QApplication(sys.argv)    # Inheriting args from the parent process
+    app = pg.mkQApp()
     win = MainWindow()
     win.show()
-    sys.exit(app.exec_())
+    sys.exit(app.exec())
+
 
 @trying(trying_print)
 def spawnViewer(*arg, **kw):
     proc = multiprocessing.Process(target=_process_entry_point, name='csvviewer', daemon=None)
     proc.start()
+
 
 if __name__ == '__main__':
     _process_entry_point()
