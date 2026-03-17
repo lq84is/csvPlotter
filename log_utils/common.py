@@ -1,5 +1,5 @@
 import functools, sys
-from PyQt5.QtWidgets import *
+from pyqtgraph.Qt.QtWidgets import *
 
 zeros = (0,0,0,0)
 zerosGroupBox = (1, 12, 1, 1)
